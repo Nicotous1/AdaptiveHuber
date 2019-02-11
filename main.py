@@ -1,11 +1,15 @@
 import numpy as np
-from math import log
 import pandas as pd
 
 from sklearn import linear_model
+from sklearn.linear_model import LassoCV
+from statsmodels.regression.quantile_regression import QuantReg
 from AdaptiveHuber import AdaptiveHuber
 from scipy import stats
 from sklearn.model_selection import GridSearchCV
+from numba import prange
+
+import warnings
 
 
 ##########################################################
@@ -15,7 +19,7 @@ from sklearn.model_selection import GridSearchCV
 ##########################################################
 
 # Comments :
-# On a vraiment aps les mêmes résultats que sur le papier même pour les algos de scikit...
+# On a vraiment pas les mêmes résultats que sur le papier même pour les algos de scikit...
 
 
 def get_errors_for(algos, tails, N, d, n, beta):
@@ -36,11 +40,19 @@ def get_errors_for(algos, tails, N, d, n, beta):
             # Run each algo and store the error
             for algo_name, algo in algos.items():
                 algo.fit(X, Y)
-                try:
+                if algo_name!="Adaptive":
                     error = np.linalg.norm(algo.coef_ - beta)
-                except: 
+                else: 
                     error = np.linalg.norm(algo.best_estimator_.coef_ - beta)
                 errors.append([tail_name, algo_name, error, k])
+            
+            # LAD estimator
+            with warnings.catch_warnings(): # Deprecation warning disabled
+                warnings.simplefilter("ignore")
+                med_reg = QuantReg(Y,X)
+                error = np.linalg.norm(med_reg.fit(q=0.5).params - beta)
+                errors.append([tail_name, "MedianReg", error, k])
+
                 
     errors = pd.DataFrame(errors, columns = ["tail", "algo", "l2_error", "round"])
     return errors
@@ -52,15 +64,15 @@ beta_star = np.zeros(d)
 beta_star[:5] = [5,-10,0,0,3]            
 
 # Maximize the hyperparameters of the Adaptative Huber
-params = {'c_tau':np.arange(start=0.025,stop=0.7,step=.1), 'c_lamb':np.arange(start=0.0025,stop=0.5,step=.07)}
+params = {'c_tau':np.arange(start=0.025,stop=0.7,step=.1), 'c_lamb':np.arange(start=0.0025,stop=0.3,step=.07)}
 adhub = AdaptiveHuber()
 best_adhub = GridSearchCV(adhub, params, cv=3, iid=True)
 
 N = 100
 algos = {"OLS" : linear_model.LinearRegression(),
-         "LASSO" : linear_model.Lasso(alpha=1),
+         "LASSO_CV" : LassoCV(cv=3),
          "Huber" : linear_model.HuberRegressor(),
-         "Adaptive" : best_adhub}
+         "Adaptive" : best_adhub} # Cannot include QuantReg as its syntax is different
 
 tails = {"normal" : stats.norm(loc = 0, scale = 4),
          "student" : stats.t(df = 1.5),
@@ -94,18 +106,21 @@ dfs = np.linspace(1.1, 3, 50)
 
 algos = {"OLS" : linear_model.LinearRegression(),
          "Huber" : linear_model.HuberRegressor(),
-         "Adaptive" : AdaptiveHuber()}
+         "Adaptive" : best_adhub}
 
 X = np.random.multivariate_normal(np.zeros(d), np.identity(d), size = n)
 errors = []
 for df in dfs:
     print(df, "...")
-    for k in range(N):
+    for k in prange(N):
         Eps = np.random.standard_t(df, size = n)
         Y = np.dot(X, beta) + Eps
         for algo_name, algo in algos.items():
             algo.fit(X, Y)
-            error = np.linalg.norm(algo.coef_ - beta)
+            if algo_name!="Adaptive":
+                error = np.linalg.norm(algo.coef_ - beta)
+            else:
+                error = np.linalg.norm(algo.best_estimator_.coef_ - beta)
             errors.append([df, error, k, algo_name])
     
 errors = pd.DataFrame(errors, columns = ["df", "l2_error", "round", "algo"])
