@@ -156,7 +156,7 @@ class AdaptiveHuber(BaseEstimator, RegressorMixin):
         
         # Iterate beta until convergence according to epsilon
         beta = np.zeros(d)
-        for _ in range(50):
+        for _ in range(1000):
             # Compute the next beta
             grad = huber_loss_grad(X, Y, beta, tau)
             beta_next = S(beta - grad/phi, lamb/phi)
@@ -174,6 +174,3 @@ class AdaptiveHuber(BaseEstimator, RegressorMixin):
                 
         warnings.warn("The LAMM algorithm did not converge !", UserWarning)
         return beta
-        
-        
-    
