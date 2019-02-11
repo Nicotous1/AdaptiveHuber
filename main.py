@@ -25,18 +25,18 @@ def get_errors_for(algos, tails, N, d, n, beta):
     '''
     errors = []
     # Generate features for all algo for this round
-    X = np.random.multivariate_normal(np.zeros(d), np.identity(d), size = n)
     for k in range(N):
+        X = np.random.multivariate_normal(np.zeros(d), np.identity(d), size = n)
         
         for tail_name, tail in tails.items():
             # Generate data from beta and the tail
             Eps = tail.rvs(n)
-            Y = np.dot(X, beta_star) + Eps
+            Y = np.dot(X, beta) + Eps
             
             # Run each algo and store the error
             for algo_name, algo in algos.items():
                 algo.fit(X, Y)
-                error = np.linalg.norm(algo.coef_ - beta_star)
+                error = np.linalg.norm(algo.coef_ - beta)
                 errors.append([tail_name, algo_name, error, k])
                 
     errors = pd.DataFrame(errors, columns = ["tail", "algo", "l2_error", "round"])
@@ -68,8 +68,6 @@ print(table)
 
 # plot boxplot for algo and tail
 errors.boxplot(column = "l2_error", by=["tail", "algo"])
-
-
 
 
 
@@ -112,24 +110,15 @@ errors.groupby(["delta", "algo"]).log_error.mean().unstack().plot()
 
 
 
+##########################################################
+#
+#      Accuracy of the selection
+#
+##########################################################
 
 
 
 
-
-
-
-
-
-
-
-
-
-import matplotlib.pyplot as plt
-
-plt.figure()
-plt.plot(dfs - 1 - 0.05, -np.log(errors))
-    
     
     
 

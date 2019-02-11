@@ -1,7 +1,7 @@
 import numpy as np
 from math import log
 from sklearn.base import BaseEstimator, RegressorMixin
-
+import warnings
 
 
 
@@ -172,6 +172,8 @@ class AdaptiveHuber(BaseEstimator, RegressorMixin):
                 return beta_next
             beta = beta_next
                 
-        return beta        
+        warnings.warn("The LAMM algorithm did not converge !", UserWarning)
+        return beta
+        
         
     
