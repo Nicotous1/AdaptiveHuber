@@ -1,16 +1,16 @@
 import numpy as np
 import pandas as pd
 
-from sklearn import linear_model
-from sklearn.linear_model import LassoCV
-from statsmodels.regression.quantile_regression import QuantReg
-from AdaptiveHuber import AdaptiveHuber
 from scipy import stats
 from sklearn.model_selection import GridSearchCV
 from numba import prange
 
 import warnings
 
+
+from AdaptiveHuber import AdaptiveHuber, QuantRegScikit, AdaptiveHuberCV
+from sklearn.linear_model import LassoCV, Lasso
+from sklearn import linear_model
 
 ##########################################################
 #
@@ -33,6 +33,7 @@ def get_errors_for(algos, tails, N, d, n, beta):
         X = np.random.multivariate_normal(np.zeros(d), np.identity(d), size = n)
         
         for tail_name, tail in tails.items():
+            print(k, "/", N, " : ", tail_name)
             # Generate data from beta and the tail
             Eps = tail.rvs(n)
             Y = np.dot(X, beta) + Eps
@@ -40,39 +41,31 @@ def get_errors_for(algos, tails, N, d, n, beta):
             # Run each algo and store the error
             for algo_name, algo in algos.items():
                 algo.fit(X, Y)
-                if algo_name!="Adaptive":
-                    error = np.linalg.norm(algo.coef_ - beta)
-                else: 
-                    error = np.linalg.norm(algo.best_estimator_.coef_ - beta)
+                error = np.linalg.norm(algo.coef_ - beta)
                 errors.append([tail_name, algo_name, error, k])
-            
-            # LAD estimator
-            with warnings.catch_warnings(): # Deprecation warning disabled
-                warnings.simplefilter("ignore")
-                med_reg = QuantReg(Y,X)
-                error = np.linalg.norm(med_reg.fit(q=0.5).params - beta)
-                errors.append([tail_name, "MedianReg", error, k])
 
                 
     errors = pd.DataFrame(errors, columns = ["tail", "algo", "l2_error", "round"])
     return errors
 
 
-d = 5
-n = 100
-beta_star = np.zeros(d)
-beta_star[:5] = [5,-10,0,0,3]            
 
-# Maximize the hyperparameters of the Adaptative Huber
-params = {'c_tau':np.arange(start=0.025,stop=0.7,step=.1), 'c_lamb':np.arange(start=0.0025,stop=0.3,step=.07)}
-adhub = AdaptiveHuber()
-best_adhub = GridSearchCV(adhub, params, cv=3, iid=True)
+
+n = 500
+d = 1000
+beta_star = np.zeros(d)
+beta_star[:5] = [5,-10,0,0,3]      
+
+adaptiveCV = AdaptiveHuberCV({'c_tau':np.arange(start=0.5,stop=1.5,step=.5), 'c_lamb':np.arange(start=0.005,stop=0.03,step=.005)})
+adaptive = AdaptiveHuber(c_lamb=0.005, c_tau=0.5)     
+ 
 
 N = 100
 algos = {"OLS" : linear_model.LinearRegression(),
-         "LASSO_CV" : LassoCV(cv=3),
+         "LassoCV" : LassoCV(cv=3),
          "Huber" : linear_model.HuberRegressor(),
-         "Adaptive" : best_adhub} # Cannot include QuantReg as its syntax is different
+         #"MedianReg" : QuantRegScikit(q = 0.5),
+         "AdaptiveCV" : adaptiveCV}
 
 tails = {"normal" : stats.norm(loc = 0, scale = 4),
          "student" : stats.t(df = 1.5),
@@ -83,7 +76,9 @@ errors = get_errors_for(algos, tails, N, d, n, beta_star)
 
 # the table of the paper
 table = errors.groupby(["algo", "tail"]).l2_error.describe()[["mean", "std"]]
-print(table)
+print(table.round(2))
+
+errors.to_pickle("{}_{}_errors.pickle".format(n, d))
 
 # plot boxplot for algo and tail
 errors.boxplot(column = "l2_error", by=["tail", "algo"])
@@ -106,6 +101,7 @@ dfs = np.linspace(1.1, 3, 50)
 
 algos = {"OLS" : linear_model.LinearRegression(),
          "Huber" : linear_model.HuberRegressor(),
+         "LASSO_CV" : LassoCV(cv=3),
          "Adaptive" : best_adhub}
 
 X = np.random.multivariate_normal(np.zeros(d), np.identity(d), size = n)
@@ -128,7 +124,7 @@ errors["delta"] = errors["df"] -1 -0.05
 errors["log_error"] = -np.log(errors.l2_error)
 
 
-errors.groupby(["delta", "algo"]).log_error.mean().unstack().plot()
+errors.loc[errors.tail == "normal"].groupby(["delta", "algo"]).log_error.mean().unstack().plot()
 
 
 

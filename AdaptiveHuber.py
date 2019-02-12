@@ -2,7 +2,8 @@ import numpy as np
 from math import log
 from sklearn.base import BaseEstimator, RegressorMixin
 import warnings
-
+from sklearn.model_selection import GridSearchCV
+from statsmodels.regression.quantile_regression import QuantReg
 
 
 
@@ -51,11 +52,12 @@ def huber_loss_grad(X, Y, beta, tau):
         Compute the huber loss gradient for a sample (X, Y) with the matrix formula
     '''
     n, d = X.shape
-    inf_selector = np.abs(Y - np.dot(X, beta)) < tau
+    X_beta = np.dot(X, beta)
+    inf_selector = np.abs(Y - X_beta) < tau
     
-    grad_power = np.dot(X[inf_selector].T, (np.dot(X[inf_selector], beta) - Y[inf_selector]))
+    grad_power = np.dot(X[inf_selector].T, (X_beta[inf_selector] - Y[inf_selector]))
     
-    grad_linear = - tau * np.dot(X[~inf_selector].T, np.sign(Y[~inf_selector] - np.dot(X[~inf_selector], beta)))
+    grad_linear = - tau * np.dot(X[~inf_selector].T, np.sign(Y[~inf_selector] - X_beta[~inf_selector]))
     
     grad = (grad_power + grad_linear)/n
     return grad
@@ -107,7 +109,7 @@ def huber_loss_grad_slow(X, Y, beta, tau):
 
 
 
-class AdaptiveHuber(BaseEstimator, RegressorMixin):
+class AdaptiveHuber(RegressorMixin, BaseEstimator):
     '''
         Adaptive Huber from the paper of Sun & al
     '''
@@ -174,3 +176,50 @@ class AdaptiveHuber(BaseEstimator, RegressorMixin):
                 
         warnings.warn("The LAMM algorithm did not converge !", UserWarning)
         return beta
+    
+    
+class AdaptiveHuberCV(RegressorMixin, BaseEstimator):
+    
+    def __init__(self, params = None, cv = 3, **kargs):
+        params = {} if params is None else params # default
+        
+        self.model = AdaptiveHuber(**kargs)
+        self.cv_model = GridSearchCV(self.model, params, cv=cv, iid=True, n_jobs= 1)
+        
+    def fit(self, X, y = None):
+        self.cv_model.fit(X, y)
+        self.coef_ = self.cv_model.best_estimator_.coef_
+    
+    
+    def predict(self, X):
+        '''
+            return Y for the sample (X)
+        '''
+        return np.dot(X, self.coef_)
+        
+    
+class QuantRegScikit(RegressorMixin, BaseEstimator):
+    
+    def __init__(self, q = 0.5):
+        self.q = q
+        
+    def fit(self, X, y = None):
+        with warnings.catch_warnings(): # Deprecation warning disabled
+            warnings.simplefilter("ignore")
+            med_reg = QuantReg(y,X)
+            self.coef_ = med_reg.fit(q=self.q).params
+    
+    
+    
+    def predict(self, X):
+        '''
+            return Y for the sample (X)
+        '''
+        return np.dot(X, self.coef_)
+        
+        
+        
+        
+        
+        
+        
