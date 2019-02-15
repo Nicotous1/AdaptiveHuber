@@ -101,6 +101,7 @@ def huber_loss_grad_slow(X, Y, beta, tau):
 
 
 
+
 ##########################################################
 #
 #      Estimator class
@@ -179,7 +180,15 @@ class AdaptiveHuber(RegressorMixin, BaseEstimator):
         return beta
     
     
+    
+    
+    
+    
 class AdaptiveHuberCV(RegressorMixin, BaseEstimator):
+    '''
+        The adaptive Huber but with a cross validation done with a grid Search CV
+        More efficient tool would be to use hyperopt
+    '''
     
     def __init__(self, params = None, cv = 3, **kargs):
         params = {} if params is None else params # default
@@ -199,7 +208,15 @@ class AdaptiveHuberCV(RegressorMixin, BaseEstimator):
         return np.dot(X, self.coef_)
         
     
+    
+    
+    
+    
+    
 class QuantRegScikit(RegressorMixin, BaseEstimator):
+    '''
+        Quantile regression from statsmodel adapt to Scikit format
+    '''
     
     def __init__(self, q = 0.5):
         self.q = q
