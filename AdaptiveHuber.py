@@ -114,7 +114,7 @@ class AdaptiveHuber(RegressorMixin, BaseEstimator):
         Adaptive Huber from the paper of Sun & al
     '''
     
-    def __init__(self, c_tau = 0.5, c_lamb = 0.005, gamma = 2, phi = 1, epsilon = 1E-6):
+    def __init__(self, c_tau = 0.5, c_lamb = 0.005, gamma = 2, phi = 1, epsilon = 1E-4):
         '''
             c_tau and c_lamb are parameters to be set via cross validation
         '''
@@ -152,7 +152,8 @@ class AdaptiveHuber(RegressorMixin, BaseEstimator):
         phi, gamma, epsilon = self.phi, self.gamma, self.epsilon
         
         # Adaptive parameters
-        conf_level = np.std(Y)*(n/log(n))**0.5
+        n_eff = n if n > d else n/log(d)
+        conf_level = np.std(Y)*(n_eff/log(n))**0.5
         tau = self.c_tau * conf_level
         lamb = self.c_lamb * conf_level
         
@@ -174,7 +175,7 @@ class AdaptiveHuber(RegressorMixin, BaseEstimator):
                 return beta_next
             beta = beta_next
                 
-        warnings.warn("The LAMM algorithm did not converge !", UserWarning)
+        warnings.warn("The LAMM algorithm did not converge ! ({})".format(delta), UserWarning)
         return beta
     
     
